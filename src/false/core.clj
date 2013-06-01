@@ -45,7 +45,10 @@
      :else (Integer/valueOf (.toString sb)))))
 
 ;; represents all the FALSE functions
-(defrecord Func [name pcnt func])
+(defrecord Func [name pcnt func stack-func?])
+
+(defn func [name pcnt func & {:keys [stack-func?]}]
+  (Func. name pcnt func (boolean stack-func?)))
 
 (def ^:const TRUE -1)
 (def ^:const FALSE 0)
@@ -61,22 +64,25 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
-(declare dup-top-stack del-top-stack)
-(def ^:const ADD (Func. "+" 2 +))
-(def ^:const SUBSTRACT (Func. "-" 2 -))
-(def ^:const MULTIPLY (Func. "*" 2 *))
-(def ^:const DEVIDE (Func. "/" 2 /))
-(def ^:const MINUS (Func. "_" 1 -))
+(declare dup-top-stack del-top-stack
+         rotate-3rd-stack copy-nth-stack)
+(def ^:const ADD (func "+" 2 +))
+(def ^:const SUBSTRACT (func "-" 2 -))
+(def ^:const MULTIPLY (func "*" 2 *))
+(def ^:const DEVIDE (func "/" 2 /))
+(def ^:const MINUS (func "_" 1 -))
 ;; -1 means true, 0 means false
-(def ^:const EQ? (Func. "=" 2 #(if (= % %2) -1 0)))
-(def ^:const NOT-EQ? (Func. "=~" 2 #(if (not= % %2) -1 0)))
-(def ^:const GT? (Func. ">" 2 #(if (> % %2) -1 0)))
-(def ^:const NOT-GT? (Func. ">~" 2 #(if-not (> % %2) -1 0)))
-(def ^:const AND? (Func. "&" 2 #(if (__and % %2) -1 0)))
-(def ^:const OR? (Func. "|" 2 #(if (__or % %2) -1 0)))
-(def ^:const NOT? (Func. "|" 1 #(if (__not %) -1 0)))
-(def ^:const DUP (Func. "$" 0 dup-top-stack))
-(def ^:const DEL (Func. "%" 0 del-top-stack))
+(def ^:const EQ? (func "=" 2 #(if (= % %2) -1 0)))
+(def ^:const NOT-EQ? (func "=~" 2 #(if (not= % %2) -1 0)))
+(def ^:const GT? (func ">" 2 #(if (> % %2) -1 0)))
+(def ^:const NOT-GT? (func ">~" 2 #(if-not (> % %2) -1 0)))
+(def ^:const AND? (func "&" 2 #(if (__and % %2) -1 0)))
+(def ^:const OR? (func "|" 2 #(if (__or % %2) -1 0)))
+(def ^:const NOT? (func "|" 1 #(if (__not %) -1 0)))
+(def ^:const DUP (func "$" 0 dup-top-stack :stack-func? true))
+(def ^:const DEL (func "%" 0 del-top-stack :stack-func? true))
+(def ^:const ROTATE (func "@" 0 rotate-3rd-stack :stack-func? true))
+(def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
 
 
 
@@ -107,11 +113,26 @@
   [stacks]
   (vec (drop-last stacks)))
 
+(defn rotate-3rd-stack
+  [stacks]
+  (assert (> (count stacks) 2))
+  (let [[stacks poped-stacks] (pop-n-stack stacks 3)
+        stacks (conj stacks (last poped-stacks)
+                     (first poped-stacks)
+                     (second poped-stacks))]
+    stacks))
+
+(defn copy-nth-stack
+  [stacks n]
+  (assert (> (count stacks) n))
+  (let [copy-stack (nth stacks (- (count stacks) n 1))]
+    (conj stacks copy-stack)))
+
 (defn execute-func [func stacks]
   (let [[stacks params] (pop-n-stack stacks (:pcnt func))
-        stacks (if (seq params)
-                 (conj stacks (apply (:func func) params))
-                 ((:func func) stacks))]
+        stacks (if (:stack-func? func)
+                 (apply (:func func) (cons stacks params))
+                 (conj stacks (apply (:func func) params)))]
     stacks))
 
 (defn execute*
@@ -152,4 +173,6 @@
 (execute [4 2 GT? 1 2 GT? OR?])
 (execute* [1 DUP])
 (execute* [1 2 DEL])
+(execute* [1 2 3 4 ROTATE])
+(execute* [1 2 3 4 2 COPYN])
 )
