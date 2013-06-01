@@ -64,6 +64,13 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
+(defn assign-var [variables n v]
+  (assoc variables n v))
+
+(defn read-var [variables name]
+  (assert (contains? variables name))
+  (variables name))
+
 (declare dup-top-stack del-top-stack
          rotate-3rd-stack copy-nth-stack)
 (def ^:const ADD (func "+" 2 +))
@@ -83,7 +90,8 @@
 (def ^:const DEL (func "%" 0 del-top-stack :stack-func? true))
 (def ^:const ROTATE (func "@" 0 rotate-3rd-stack :stack-func? true))
 (def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
-
+(def ^:const ASSIGN(func ":" 2 assign-var))
+(def ^:const READVAR(func ";" 1 read-var))
 
 
 ;; ====== parse the FALSE code into commands =====
@@ -128,30 +136,42 @@
   (let [copy-stack (nth stacks (- (count stacks) n 1))]
     (conj stacks copy-stack)))
 
-(defn execute-func [func stacks]
-  (let [[stacks params] (pop-n-stack stacks (:pcnt func))
-        stacks (if (:stack-func? func)
-                 (apply (:func func) (cons stacks params))
-                 (conj stacks (apply (:func func) params)))]
-    stacks))
+(defn execute-func [func stacks-and-variables]
+  (println "execute-func...")
+  (let [{:keys [stacks variables]} stacks-and-variables
+        [stacks params] (pop-n-stack stacks (:pcnt func))
+        _ (println "params: " params)
+        stacks (cond
+                (= ":" (:name func)) stacks
+                (= ";" (:name func)) (conj stacks (apply read-var (cons variables params)))
+                (:stack-func? func) (apply (:func func) (cons stacks params))
+                :else (conj stacks (apply (:func func) params)))
+        variables (if (= ":" (:name func))
+                    (apply assign-var (cons variables (reverse params)))
+                    variables)]
+    {:stacks stacks :variables variables}))
 
 (defn execute*
   "Executes commands"
   [commands]
   (println "before execute: " commands)
-  (loop [commands commands stacks []]
+  (loop [commands commands
+         stacks []
+         variables {}]
     (if (seq commands)
       (let [command (first commands)
-            commands (rest commands) 
-            stacks (if (= Func (type command))
-                     (execute-func command stacks)
-                     (conj stacks command))]
-        (recur commands stacks))
-      stacks)))
+            commands (rest commands)
+            _ (println "commands: " commands ", stacks: " stacks ", variables: " variables)
+            {:keys [stacks variables]} (if (= Func (type command))
+                                 (execute-func command {:stacks stacks :variables variables})
+                                 {:stacks (conj stacks command)
+                                  :variables variables})]
+        (recur commands stacks variables))
+      {:stacks stacks :varaibles variables})))
 
 (defn execute [commands]
-  (let [stacks (execute* commands)]
-    (first stacks)))
+  (let [ret (execute* commands)]
+    (first (:stacks ret))))
 
 (comment
   (read-string* (reader "hello\"adlfjl"))
@@ -175,4 +195,7 @@
 (execute* [1 2 DEL])
 (execute* [1 2 3 4 ROTATE])
 (execute* [1 2 3 4 2 COPYN])
+(execute* [1 \a ASSIGN])
+(execute* [1 \a ASSIGN \a READVAR])
+(execute* [1 \a ASSIGN \a READVAR 3 ADD])
 )
