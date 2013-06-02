@@ -46,11 +46,10 @@
 
      :else (Integer/valueOf (.toString sb)))))
 
-(defn func [name pcnt func & {:keys [stack-func? custom?]}]
+(defn func [name pcnt func & {:keys [custom?]}]
   {:name name
    :pcnt pcnt
    :func func
-   :stack-func? (boolean stack-func?)
    :custom? (boolean custom?)})
 
 (defn func?
@@ -79,9 +78,9 @@
 (defn mk-custom-func
   "Makes the custom function."
   [commands]
-  (fn [vars & params]
+  (fn [context & params]
     (let [commands (concat params commands)]
-      (execute* commands vars))))
+      (execute* commands (:vars context)))))
 
 (defn custom-func [commands]
   (let [name (str "cf_" (RT/nextID))
@@ -103,20 +102,20 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
-(defn- __if [context iftest action]
+(defn __if [context iftest action]
   (let [iftest (if (custom-func? iftest)
                  (first (:stacks ((:func iftest) (:vars context))))
                  iftest)
         ret (when (= iftest TRUE)
               ((:func action) (:vars context)))]
-    (:stacks ret)))
+    (update-in context [:stacks] #(vec (concat % (:stacks ret))))))
 
-(defn assign-var [vars n v]
-  (assoc vars n v))
+(defn assign-var [context v n]
+  (assoc-in context [:vars n] v))
 
-(defn read-var [vars name]
-  (assert (contains? vars name))
-  (vars name))
+(defn read-var [context name]
+  (assert (contains? (:vars context) name))
+  (update-in context [:stacks] conj ((:vars context) name)))
 
 (defn print-int [i]
   (print i))
@@ -144,54 +143,88 @@
   "Duplicates stack top.
 
   e.g. (dup-top-stack [1 2 3]) => [1 2 3 3]"
-  [stacks]
-  (conj stacks (peek stacks)))
+  [context]
+  (update-in context [:stacks] conj (peek (:stacks context))))
 
 (defn del-top-stack
   "Deletes stack top.
 
   e.g. (del-top-stack [1 2 3]) => [1 2]"
-  [stacks]
-  (vec (drop-last stacks)))
+  [context]
+  (update-in context [:stacks] #(vec (drop-last %))))
 
 (defn rotate-3rd-stack
   "Rotate third stack frame to stack top
 
   e.g. (rotate-3rd-stack [1 2 3]) => [2 3 1]"
-  [stacks]
-  (assert (> (count stacks) 2))
-  (let [[stacks poped-stacks] (pop-n-stack stacks 3)
+  [context]
+  (assert (> (count (:stacks context)) 2))
+  (let [stacks (:stacks context)
+        [stacks poped-stacks] (pop-n-stack stacks 3)
         stacks (conj stacks (second poped-stacks)
                      (last poped-stacks)
                      (first poped-stacks))]
-    stacks))
+    {:stacks stacks
+     :vars (:vars context)}))
 
 (defn copy-nth-stack
   "Copy the nth stack frame to stack's top
 
   e.g. (copy-nth-stack [1 2 3] 1) => [1 2 3 2]
   "
-  [stacks n]
-  (assert (> (count stacks) n))
-  (let [copy-stack (nth stacks (- (count stacks) n 1))]
-    (conj stacks copy-stack)))
+  [context n]
+  (assert (> (count (:stacks context)) n))
+  (let [stacks (:stacks context)
+        copy-stack (nth stacks (- (count stacks) n 1))]
+    (update-in context [:stacks] conj copy-stack)))
+
+(defn- __add [context x y]
+  (update-in context [:stacks] conj (+ x y)))
+
+(defn- __substract [context x y]
+  (update-in context [:stacks] conj (- x y)))
+
+(defn- __multiply [context x y]
+  (update-in context [:stacks] conj (* x y)))
+
+(defn- __devide [context x y]
+  (update-in context [:stacks] conj (/ x y)))
+
+(defn- __minus [context x]
+  (update-in context [:stacks] conj (- x)))
+
+(defn- __eq? [context x y]
+  (update-in context [:stacks] conj (if (= x y) TRUE FALSE)))
+
+(defn- __gt? [context x y]
+  (update-in context [:stacks] conj (if (> x y) TRUE FALSE)))
+
+(defn- __and? [context x y]
+  (update-in context [:stacks] conj (if (__and x y) TRUE FALSE)))
+
+(defn- __or? [context x y]
+  (update-in context [:stacks] conj (if (__or x y) TRUE FALSE)))
+
+(defn- __not? [context x]
+  (update-in context [:stacks] conj (if (__not x) TRUE FALSE)))
 
 ;; all the functions in FALSE
-(def ^:const ADD (func "+" 2 +))
-(def ^:const SUBSTRACT (func "-" 2 -))
-(def ^:const MULTIPLY (func "*" 2 *))
-(def ^:const DEVIDE (func "/" 2 /))
-(def ^:const MINUS (func "_" 1 -))
+(def ^:const ADD (func "+" 2 __add))
+(def ^:const SUBSTRACT (func "-" 2 __substract))
+(def ^:const MULTIPLY (func "*" 2 __multiply))
+(def ^:const DEVIDE (func "/" 2 __devide))
+(def ^:const MINUS (func "_" 1 __minus))
 ;; -1 means true, 0 means false
-(def ^:const EQ? (func "=" 2 #(if (= % %2) -1 0)))
-(def ^:const GT? (func ">" 2 #(if (> % %2) -1 0)))
-(def ^:const AND? (func "&" 2 #(if (__and % %2) -1 0)))
-(def ^:const OR? (func "|" 2 #(if (__or % %2) -1 0)))
-(def ^:const NOT? (func "|" 1 #(if (__not %) -1 0)))
-(def ^:const DUP (func "$" 0 dup-top-stack :stack-func? true))
-(def ^:const DEL (func "%" 0 del-top-stack :stack-func? true))
-(def ^:const ROTATE (func "@" 0 rotate-3rd-stack :stack-func? true))
-(def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
+(def ^:const EQ? (func "=" 2 __eq?))
+(def ^:const GT? (func ">" 2 __gt?))
+(def ^:const AND? (func "&" 2 __and?))
+(def ^:const OR? (func "|" 2 __or?))
+(def ^:const NOT? (func "|" 1 __not?))
+
+(def ^:const DUP (func "$" 0 dup-top-stack))
+(def ^:const DEL (func "%" 0 del-top-stack))
+(def ^:const ROTATE (func "@" 0 rotate-3rd-stack))
+(def ^:const COPYN (func "ø" 1 copy-nth-stack))
 (def ^:const ASSIGNVAR (func ":" 2 assign-var))
 (def ^:const READVAR (func ";" 1 read-var))
 (def ^:const IF (func "?" 2 __if))
@@ -216,24 +249,18 @@
                         (inc pcnt)
                         pcnt)
         [stacks params] (pop-n-stack stacks stacks-to-pop)
-        stacks (cond
-                (same-fn? func ASSIGNVAR) stacks
-                (same-fn? func READVAR) (conj stacks (apply read-var (cons vars params)))
-                (same-fn? func IF) (vec (concat stacks (apply __if (cons context params))))
-                (same-fn? func APPLY)
-                (let [real-func (last params)
-                      params (drop-last params)
-                      ret (apply (:func real-func) (cons vars params))
-                      sub-stacks (:stacks ret)]
-                  (vec (concat stacks sub-stacks)))
-
-                (:stack-func? func) (apply (:func func) (cons stacks params))
-                
-                :else (conj stacks (apply (:func func) params)))
-        vars (if (same-fn? func ASSIGNVAR)
-                    (apply assign-var (cons vars (reverse params)))
-                    vars)]
-    {:stacks stacks :vars vars}))
+        [real-func params] (if (same-fn? func APPLY)
+                             [(last params) (drop-last params)]
+                             [func params])
+        real-func (if (same-fn? func APPLY)
+                    (update-in real-func [:func] (fn [orig-fn]
+                                                   (fn [context & params]
+                                                     (let [ret (apply orig-fn (cons context params))
+                                                           sub-stacks (:stacks ret)]
+                                                       (assoc-in context [:stacks] (vec (concat (:stacks context) sub-stacks)))))))
+                    real-func)]
+    (apply (:func real-func) (cons {:stacks stacks :vars vars}
+                                   params))))
 
 (defn execute*
   "Executes commands"
