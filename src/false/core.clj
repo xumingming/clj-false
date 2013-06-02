@@ -1,6 +1,7 @@
 (ns false.core
   (:import [clojure.lang RT]))
 
+;; ===== FALSE Reader related =====
 (defmacro ^:private update! [what f]
   (list 'set! what (list f what)))
 
@@ -45,18 +46,37 @@
 
      :else (Integer/valueOf (.toString sb)))))
 
-;; represents all the FALSE functions
-(defrecord Func [name pcnt func stack-func? custom?])
-
 (defn func [name pcnt func & {:keys [stack-func? custom?]}]
-  (Func. name pcnt func (boolean stack-func?) (boolean custom?)))
+  {:name name
+   :pcnt pcnt
+   :func func
+   :stack-func? stack-func?
+   :custom? custom?})
+
+(defn func?
+  "whether x is a FALSE function"
+  [x]
+  (map? x))
+
+(defn same-fn?
+  "Whether x and y are the same fn?"
+  [x y]
+  (= (:name x) (:name y)))
 
 (defn get-custom-func-pcnt [commands]
   (let [[func idx] (loop [idx 0]
-                     (if (= (type (nth commands idx)) Func)
+                     (if (func? (nth commands idx))
                        [(nth commands idx) idx]
                        (recur (inc idx))))]
     (- (:pcnt func) idx)))
+
+(declare execute*)
+(defn mk-custom-func
+  "Makes the custom function."
+  [commands]
+  (fn [variables & params]
+    (let [commands (concat params commands)]
+      (execute* commands variables))))
 
 (defn custom-func [commands]
   (let [name (str "cf_" (RT/nextID))
@@ -78,10 +98,6 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
-(defn- __if [iftest ifaction]
-  (if (= TRUE iftest)
-    (apply-custom-func ifaction )))
-
 (defn assign-var [variables n v]
   (assoc variables n v))
 
@@ -92,19 +108,10 @@
 (defn print-int [i]
   (print i))
 
-(defn mk-custom-func [commands]
-  (println "mk-custom-func: commands: " commands)
-  (fn [variables & params]
-    (let [commands (concat params commands)]
-      (execute* commands variables))))
-
-(defn apply-custom-func [func params variables]
-  (apply func (cons variables params)))
-
-
 
 (declare dup-top-stack del-top-stack
          rotate-3rd-stack copy-nth-stack)
+;; all the functions in FALSE
 (def ^:const ADD (func "+" 2 +))
 (def ^:const SUBSTRACT (func "-" 2 -))
 (def ^:const MULTIPLY (func "*" 2 *))
@@ -112,9 +119,7 @@
 (def ^:const MINUS (func "_" 1 -))
 ;; -1 means true, 0 means false
 (def ^:const EQ? (func "=" 2 #(if (= % %2) -1 0)))
-(def ^:const NOT-EQ? (func "=~" 2 #(if (not= % %2) -1 0)))
 (def ^:const GT? (func ">" 2 #(if (> % %2) -1 0)))
-(def ^:const NOT-GT? (func ">~" 2 #(if-not (> % %2) -1 0)))
 (def ^:const AND? (func "&" 2 #(if (__and % %2) -1 0)))
 (def ^:const OR? (func "|" 2 #(if (__or % %2) -1 0)))
 (def ^:const NOT? (func "|" 1 #(if (__not %) -1 0)))
@@ -122,17 +127,22 @@
 (def ^:const DEL (func "%" 0 del-top-stack :stack-func? true))
 (def ^:const ROTATE (func "@" 0 rotate-3rd-stack :stack-func? true))
 (def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
-(def ^:const ASSIGN (func ":" 2 assign-var))
+(def ^:const ASSIGNVAR (func ":" 2 assign-var))
 (def ^:const READVAR (func ";" 1 read-var))
+;; APPLY is just a skeleton: pcnt and func are nil, because
+;; the real function is the function applied
 (def ^:const APPLY (func "!" nil nil))
 
-;; ====== parse the FALSE code into commands =====
 (defn parse [program]
   (loop [commands []]))
 
 
 ;; ===== stack-based commands execution ======
-(defn pop-n-stack [stacks n]
+(defn pop-n-stack
+  "Pops n stack frames from top.
+
+  e.g. (pop-n-stack [1 2 3] 2) => [[1] [2 3]]"
+  [stacks n]
   (loop [stacks stacks poped-stacks []]
     (if (< (count poped-stacks) n)
       (do
@@ -141,19 +151,31 @@
       [stacks (reverse poped-stacks)])))
 
 (defn pop-one-stack
+  "Pops the stack top.
+
+  e.g. (pop-one-stack [1 2 3]) => [[1 2] 3]"
   [stacks]
   (let [[stacks [stack]] (pop-n-stack stacks 1)]
     [stacks stack]))
 
 (defn dup-top-stack
+  "Duplicates stack top.
+
+  e.g. (dup-top-stack [1 2 3]) => [1 2 3 3]"
   [stacks]
   (conj stacks (peek stacks)))
 
 (defn del-top-stack
+  "Deletes stack top.
+
+  e.g. (del-top-stack [1 2 3]) => [1 2]"
   [stacks]
   (vec (drop-last stacks)))
 
 (defn rotate-3rd-stack
+  "Rotate third stack frame to stack top
+
+  e.g. (rotate-3rd-stack [1 2 3]) => [2 3 1]"
   [stacks]
   (assert (> (count stacks) 2))
   (let [[stacks poped-stacks] (pop-n-stack stacks 3)
@@ -163,29 +185,40 @@
     stacks))
 
 (defn copy-nth-stack
+  "Copy the nth stack frame to stack's top
+
+  e.g. (copy-nth-stack [1 2 3] 1) => [1 2 3 2]
+  "
   [stacks n]
   (assert (> (count stacks) n))
   (let [copy-stack (nth stacks (- (count stacks) n 1))]
     (conj stacks copy-stack)))
 
-(defn execute-func [func stacks-and-variables]
+(defn execute-func
+  "Executes the specified function"
+  [func stacks-and-variables]
   (let [{:keys [stacks variables]} stacks-and-variables
-        real-pcnt (if (= "!" (:name func))
-                    (inc (:pcnt (peek stacks)))
-                    (:pcnt func))
-        [stacks params] (pop-n-stack stacks real-pcnt)
+        pcnt (if (same-fn? func APPLY)
+               (:pcnt (peek stacks))
+               (:pcnt func))
+        stacks-to-pop (if (= func APPLY)
+                        (inc pcnt)
+                        pcnt)
+        [stacks params] (pop-n-stack stacks stacks-to-pop)
+        _ (println "func: " func ", ASSIGNVAR: " ASSIGNVAR)
         stacks (cond
-                (= ":" (:name func)) stacks
-                (= ";" (:name func)) (conj stacks (apply read-var (cons variables params)))
-                (= "!" (:name func))
+                (same-fn? func ASSIGNVAR) stacks
+                (same-fn? func READVAR) (conj stacks (apply read-var (cons variables params)))
+                
+                (same-fn? func APPLY)
                 (let [real-func (last params)
                       params (drop-last params)]
-                  (println "xxxxx: func: " real-func ", params:" params ", ")
                   (conj stacks (apply (:func real-func) (cons variables params))))
 
                 (:stack-func? func) (apply (:func func) (cons stacks params))
+                
                 :else (conj stacks (apply (:func func) params)))
-        variables (if (= ":" (:name func))
+        variables (if (same-fn? func ASSIGNVAR)
                     (apply assign-var (cons variables (reverse params)))
                     variables)]
     {:stacks stacks :variables variables}))
@@ -201,11 +234,11 @@
        (if (seq commands)
          (let [command (first commands)
                commands (rest commands)
-               {:keys [stacks variables]} (if (and (= Func (type command))
-                                                   (not (:custom? command)))
-                                            (execute-func command {:stacks stacks :variables variables})
-                                            {:stacks (conj stacks command)
-                                             :variables variables})]
+               [stacks variables] (if  (and (func? command)
+                                            (not (:custom? command)))
+                                    (let [ret (execute-func command {:stacks stacks :variables variables})]
+                                      [(:stacks ret) (:variables ret)])
+                                    [(conj stacks command) variables])]
            (recur commands stacks variables))
          {:stacks stacks :varaibles variables}))))
 
@@ -225,10 +258,8 @@
 (execute [4 MINUS])
 (execute [1 2 ADD 4 DEVIDE])
 (execute [4 2 GT?])
-(execute [4 2 NOT-GT?])
 (execute [4 2 EQ?])
 (execute [1 2 EQ?])
-(execute [4 2 NOT-EQ?])
 (execute [4 2 GT? 3 2 GT? AND?])
 (execute [4 2 GT? 1 2 GT? AND?])
 (execute [4 2 GT? 1 2 GT? OR?])
@@ -236,14 +267,14 @@
 (execute* [1 2 DEL])
 (execute* [1 2 3 4 ROTATE])
 (execute* [1 2 3 4 2 COPYN])
-(execute* [1 \a ASSIGN])
-(execute* [1 \a ASSIGN \a READVAR])
-(execute* [1 \a ASSIGN \a READVAR 3 ADD])
+(execute* [1 \a ASSIGNVAR])
+(execute* [1 \a ASSIGNVAR \a READVAR])
+(execute* [1 \a ASSIGNVAR \a READVAR 3 ADD])
 (mk-custom-func [1 2 ADD] {})
 ((mk-custom-func [1 ADD] {}) 1)
 (custom-func [1 ADD])
 (execute [1 (custom-func [1 ADD]) APPLY])
 (execute [1 (custom-func [1 ADD 100 MINUS ADD]) APPLY])
-(execute [1 \a ASSIGN \a READVAR (custom-func [1 ADD])])
-
+(execute [1 \a ASSIGNVAR])
+(execute [1 \a ASSIGNVAR \a READVAR (custom-func [1 ADD]) APPLY])
 )
