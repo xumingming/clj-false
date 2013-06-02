@@ -156,14 +156,8 @@
         stacks (cond
                 (= ":" (:name func)) stacks
                 (= ";" (:name func)) (conj stacks (apply read-var (cons variables params)))
-                (= "!" (:name func))
-                (let [params (into [] (for [param params]
-                                        (if (and (= Character (type param))
-                                                 (>= (int param) 97)
-                                                 (<= (int param) 122))
-                                          (variables param)
-                                          param)))]
-                  (conj stacks (apply-custom-func (last params) (drop-last params) variables)))
+                (= "!" (:name func)) (conj stacks (apply-custom-func (last params) (drop-last params) variables))
+
                 (:stack-func? func) (apply (:func func) (cons stacks params))
                 :else (conj stacks (apply (:func func) params)))
         variables (if (= ":" (:name func))
@@ -222,5 +216,5 @@
 (mk-custom-func [1 2 ADD] {})
 ((mk-custom-func [1 ADD] {}) 1)
 (execute [1 (mk-custom-func [1 ADD]) APPLY])
-(execute [1 \a ASSIGN \a (mk-custom-func [1 ADD]) APPLY])
+(execute [1 \a ASSIGN \a READVAR (mk-custom-func [1 ADD]) APPLY])
 )
