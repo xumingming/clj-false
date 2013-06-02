@@ -1,4 +1,5 @@
-(ns false.core)
+(ns false.core
+  (:import [clojure.lang RT]))
 
 (defmacro ^:private update! [what f]
   (list 'set! what (list f what)))
@@ -45,10 +46,23 @@
      :else (Integer/valueOf (.toString sb)))))
 
 ;; represents all the FALSE functions
-(defrecord Func [name pcnt func stack-func?])
+(defrecord Func [name pcnt func stack-func? custom?])
 
-(defn func [name pcnt func & {:keys [stack-func?]}]
-  (Func. name pcnt func (boolean stack-func?)))
+(defn func [name pcnt func & {:keys [stack-func? custom?]}]
+  (Func. name pcnt func (boolean stack-func?) (boolean custom?)))
+
+(defn get-custom-func-pcnt [commands]
+  (let [[func idx] (loop [idx 0]
+                     (if (= (type (nth commands idx)) Func)
+                       [(nth commands idx) idx]
+                       (recur (inc idx))))]
+    (- (:pcnt func) idx)))
+
+(defn custom-func [commands]
+  (let [name (str "cf_" (RT/nextID))
+        pcnt (get-custom-func-pcnt commands)
+        afn (mk-custom-func commands)]
+    (func name pcnt afn :custom? true)))
 
 (def ^:const TRUE -1)
 (def ^:const FALSE 0)
@@ -64,6 +78,10 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
+(defn- __if [iftest ifaction]
+  (if (= TRUE iftest)
+    (apply-custom-func ifaction )))
+
 (defn assign-var [variables n v]
   (assoc variables n v))
 
@@ -75,12 +93,15 @@
   (print i))
 
 (defn mk-custom-func [commands]
+  (println "mk-custom-func: commands: " commands)
   (fn [variables & params]
     (let [commands (concat params commands)]
       (execute* commands variables))))
 
 (defn apply-custom-func [func params variables]
   (apply func (cons variables params)))
+
+
 
 (declare dup-top-stack del-top-stack
          rotate-3rd-stack copy-nth-stack)
@@ -103,8 +124,7 @@
 (def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
 (def ^:const ASSIGN (func ":" 2 assign-var))
 (def ^:const READVAR (func ";" 1 read-var))
-(def ^:const APPLY (func "!" 2 apply-custom-func))
-
+(def ^:const APPLY (func "!" nil nil))
 
 ;; ====== parse the FALSE code into commands =====
 (defn parse [program]
@@ -149,14 +169,19 @@
     (conj stacks copy-stack)))
 
 (defn execute-func [func stacks-and-variables]
-  (println "execute-func...")
   (let [{:keys [stacks variables]} stacks-and-variables
-        [stacks params] (pop-n-stack stacks (:pcnt func))
-        _ (println "params: " params)
+        real-pcnt (if (= "!" (:name func))
+                    (inc (:pcnt (peek stacks)))
+                    (:pcnt func))
+        [stacks params] (pop-n-stack stacks real-pcnt)
         stacks (cond
                 (= ":" (:name func)) stacks
                 (= ";" (:name func)) (conj stacks (apply read-var (cons variables params)))
-                (= "!" (:name func)) (conj stacks (apply-custom-func (last params) (drop-last params) variables))
+                (= "!" (:name func))
+                (let [real-func (last params)
+                      params (drop-last params)]
+                  (println "xxxxx: func: " real-func ", params:" params ", ")
+                  (conj stacks (apply (:func real-func) (cons variables params))))
 
                 (:stack-func? func) (apply (:func func) (cons stacks params))
                 :else (conj stacks (apply (:func func) params)))
@@ -176,7 +201,8 @@
        (if (seq commands)
          (let [command (first commands)
                commands (rest commands)
-               {:keys [stacks variables]} (if (= Func (type command))
+               {:keys [stacks variables]} (if (and (= Func (type command))
+                                                   (not (:custom? command)))
                                             (execute-func command {:stacks stacks :variables variables})
                                             {:stacks (conj stacks command)
                                              :variables variables})]
@@ -215,6 +241,9 @@
 (execute* [1 \a ASSIGN \a READVAR 3 ADD])
 (mk-custom-func [1 2 ADD] {})
 ((mk-custom-func [1 ADD] {}) 1)
-(execute [1 (mk-custom-func [1 ADD]) APPLY])
-(execute [1 \a ASSIGN \a READVAR (mk-custom-func [1 ADD]) APPLY])
+(custom-func [1 ADD])
+(execute [1 (custom-func [1 ADD]) APPLY])
+(execute [1 (custom-func [1 ADD 100 MINUS ADD]) APPLY])
+(execute [1 \a ASSIGN \a READVAR (custom-func [1 ADD])])
+
 )
