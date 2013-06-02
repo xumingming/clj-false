@@ -50,13 +50,18 @@
   {:name name
    :pcnt pcnt
    :func func
-   :stack-func? stack-func?
-   :custom? custom?})
+   :stack-func? (boolean stack-func?)
+   :custom? (boolean custom?)})
 
 (defn func?
   "whether x is a FALSE function"
   [x]
   (map? x))
+
+(defn custom-func?
+  "whether x is a FALSE function"
+  [x]
+  (and (func? x) (:custom? x)))
 
 (defn same-fn?
   "Whether x and y are the same fn?"
@@ -98,6 +103,14 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
+(defn- __if [context iftest action]
+  (let [iftest (if (custom-func? iftest)
+                 (first (:stacks ((:func iftest) (:variables context))))
+                 iftest)
+        ret (when (= iftest TRUE)
+              ((:func action) (:variables context)))]
+    (:stacks ret)))
+
 (defn assign-var [variables n v]
   (assoc variables n v))
 
@@ -129,6 +142,7 @@
 (def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
 (def ^:const ASSIGNVAR (func ":" 2 assign-var))
 (def ^:const READVAR (func ";" 1 read-var))
+(def ^:const IF (func "?" 2 __if))
 ;; APPLY is just a skeleton: pcnt and func are nil, because
 ;; the real function is the function applied
 (def ^:const APPLY (func "!" nil nil))
@@ -196,8 +210,8 @@
 
 (defn execute-func
   "Executes the specified function"
-  [func stacks-and-variables]
-  (let [{:keys [stacks variables]} stacks-and-variables
+  [func context]
+  (let [{:keys [stacks variables]} context
         pcnt (if (same-fn? func APPLY)
                (:pcnt (peek stacks))
                (:pcnt func))
@@ -209,11 +223,13 @@
         stacks (cond
                 (same-fn? func ASSIGNVAR) stacks
                 (same-fn? func READVAR) (conj stacks (apply read-var (cons variables params)))
-                
+                (same-fn? func IF) (vec (concat stacks (apply __if (cons context params))))
                 (same-fn? func APPLY)
                 (let [real-func (last params)
-                      params (drop-last params)]
-                  (conj stacks (apply (:func real-func) (cons variables params))))
+                      params (drop-last params)
+                      ret (apply (:func real-func) (cons variables params))
+                      sub-stacks (:stacks ret)]
+                  (vec (concat stacks sub-stacks)))
 
                 (:stack-func? func) (apply (:func func) (cons stacks params))
                 
@@ -273,8 +289,14 @@
 (mk-custom-func [1 2 ADD] {})
 ((mk-custom-func [1 ADD] {}) 1)
 (custom-func [1 ADD])
+(execute* [(custom-func [1 2 ADD]) APPLY])
 (execute [1 (custom-func [1 ADD]) APPLY])
 (execute [1 (custom-func [1 ADD 100 MINUS ADD]) APPLY])
-(execute [1 \a ASSIGNVAR])
-(execute [1 \a ASSIGNVAR \a READVAR (custom-func [1 ADD]) APPLY])
+(execute* [1 \a ASSIGNVAR])
+(execute* [1 \a ASSIGNVAR \a READVAR (custom-func [1 ADD]) APPLY])
+(execute* [1 1 EQ?])
+(execute* [1 1 EQ? (custom-func [1 2 ADD]) IF])
+(execute* [1 \a ASSIGNVAR \a READVAR 1 EQ? (custom-func [1 2 ADD]) IF])
+(execute* [1 \a ASSIGNVAR \a READVAR 2 EQ? (custom-func [1 2 ADD]) IF])
+(execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF])
 )
