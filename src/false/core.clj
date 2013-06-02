@@ -71,6 +71,17 @@
   (assert (contains? variables name))
   (variables name))
 
+(defn print-int [i]
+  (print i))
+
+(defn mk-custom-func [commands]
+  (fn [variables & params]
+    (let [commands (concat params commands)]
+      (execute* commands variables))))
+
+(defn apply-custom-func [func params variables]
+  (apply func (cons variables params)))
+
 (declare dup-top-stack del-top-stack
          rotate-3rd-stack copy-nth-stack)
 (def ^:const ADD (func "+" 2 +))
@@ -90,8 +101,9 @@
 (def ^:const DEL (func "%" 0 del-top-stack :stack-func? true))
 (def ^:const ROTATE (func "@" 0 rotate-3rd-stack :stack-func? true))
 (def ^:const COPYN (func "ø" 1 copy-nth-stack :stack-func? true))
-(def ^:const ASSIGN(func ":" 2 assign-var))
-(def ^:const READVAR(func ";" 1 read-var))
+(def ^:const ASSIGN (func ":" 2 assign-var))
+(def ^:const READVAR (func ";" 1 read-var))
+(def ^:const APPLY (func "!" 2 apply-custom-func))
 
 
 ;; ====== parse the FALSE code into commands =====
@@ -144,6 +156,14 @@
         stacks (cond
                 (= ":" (:name func)) stacks
                 (= ";" (:name func)) (conj stacks (apply read-var (cons variables params)))
+                (= "!" (:name func))
+                (let [params (into [] (for [param params]
+                                        (if (and (= Character (type param))
+                                                 (>= (int param) 97)
+                                                 (<= (int param) 122))
+                                          (variables param)
+                                          param)))]
+                  (conj stacks (apply-custom-func (last params) (drop-last params) variables)))
                 (:stack-func? func) (apply (:func func) (cons stacks params))
                 :else (conj stacks (apply (:func func) params)))
         variables (if (= ":" (:name func))
@@ -153,21 +173,22 @@
 
 (defn execute*
   "Executes commands"
-  [commands]
-  (println "before execute: " commands)
-  (loop [commands commands
-         stacks []
-         variables {}]
-    (if (seq commands)
-      (let [command (first commands)
-            commands (rest commands)
-            _ (println "commands: " commands ", stacks: " stacks ", variables: " variables)
-            {:keys [stacks variables]} (if (= Func (type command))
-                                 (execute-func command {:stacks stacks :variables variables})
-                                 {:stacks (conj stacks command)
-                                  :variables variables})]
-        (recur commands stacks variables))
-      {:stacks stacks :varaibles variables})))
+  ([commands]
+     (execute* commands {}))
+  ([commands variables]
+     (loop [commands commands
+            stacks []
+            variables variables]
+       (if (seq commands)
+         (let [command (first commands)
+               commands (rest commands)
+               {:keys [stacks variables]} (if (= Func (type command))
+                                            (execute-func command {:stacks stacks :variables variables})
+                                            {:stacks (conj stacks command)
+                                             :variables variables})]
+           (recur commands stacks variables))
+         {:stacks stacks :varaibles variables}))))
+
 
 (defn execute [commands]
   (let [ret (execute* commands)]
@@ -198,4 +219,8 @@
 (execute* [1 \a ASSIGN])
 (execute* [1 \a ASSIGN \a READVAR])
 (execute* [1 \a ASSIGN \a READVAR 3 ADD])
+(mk-custom-func [1 2 ADD] {})
+((mk-custom-func [1 ADD] {}) 1)
+(execute [1 (mk-custom-func [1 ADD]) APPLY])
+(execute [1 \a ASSIGN \a (mk-custom-func [1 ADD]) APPLY])
 )
