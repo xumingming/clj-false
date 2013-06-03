@@ -95,10 +95,19 @@
                  iftest)
         context (update-in context [:stacks] #(vec (drop-last %)))]
     (if (= iftest TRUE)
-      (let [ret (execute-custom-func context action)
-            context (update-in context [:stacks] #(vec (concat % (:stacks ret))))
-            context (update-in context [:vars] #(merge % (:vars ret)))]
-        context)
+      (execute-custom-func context action)
+      context)))
+
+(defn __while [context whiletest action]
+  (let [context (if (custom-func? whiletest)
+                  (execute-custom-func context whiletest)
+                  context)
+        evaled-whiletest (if (custom-func? whiletest)
+                           (peek (:stacks context))
+                           whiletest)
+        context (update-in context [:stacks] #(vec (drop-last %)))]
+    (if (= evaled-whiletest TRUE)
+      (recur (execute-custom-func context action) whiletest action)
       context)))
 
 
@@ -220,6 +229,7 @@
 (def ^:const ASSIGNVAR (func ":" 2 assign-var))
 (def ^:const READVAR (func ";" 1 read-var))
 (def ^:const IF (func "?" 2 __if))
+(def ^:const WHILE (func "#" 2 __while))
 ;; APPLY is just a skeleton: pcnt and func are nil, because
 ;; the real function is the function applied
 (def ^:const APPLY (func "!" 1 nil))

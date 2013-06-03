@@ -97,6 +97,16 @@
   (testing "testing : ; ?"
     (is (= (execute* [1 \a ASSIGNVAR \a READVAR 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
 
-  (testing "testing if again"
+  (testing "testing ? again"
     (is (= (execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF])
-           {:stacks [3] :vars {}}))))
+           {:stacks [3] :vars {}})))
+
+  (testing "testing #"
+    (is (= (execute* [2 \a ASSIGNVAR (custom-func [\a READVAR 0 GT?]) (custom-func [\a READVAR 1 SUBSTRACT \a ASSIGNVAR]) WHILE])
+           {:stacks [] :vars {\a 0}})))
+
+  (testing "testing #"
+    (is (= (execute* [1 1 \a ASSIGNVAR (custom-func [\a READVAR 0 GT?]) (custom-func [2 ADD \a READVAR 1 SUBSTRACT \a ASSIGNVAR]) WHILE])
+           {:stacks [3] :vars {\a 0}})))
+
+  )
