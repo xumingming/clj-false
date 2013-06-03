@@ -1,6 +1,7 @@
 (ns false.core-test
   (:use clojure.test
-        false.core))
+        false.core)
+  (import java.io.StringWriter))
 
 (deftest test-executor
   (testing "testing +"
@@ -109,4 +110,15 @@
     (is (= (execute* [1 1 \a ASSIGNVAR (custom-func [\a READVAR 0 GT?]) (custom-func [2 ADD \a READVAR 1 SUBSTRACT \a ASSIGNVAR]) WHILE])
            {:stacks [3] :vars {\a 0}})))
 
+  (testing "testing ."
+    (let [wr (StringWriter.)]
+      (binding [*out* wr]
+        (execute* [65 PRINT-INT]))
+      (is (= "65" (str wr)))))
+
+  (testing "testing ."
+    (let [wr (StringWriter.)]
+      (binding [*out* wr]
+        (execute* [65 PRINT-CHAR]))
+      (is (= "A" (str wr)))))  
   )

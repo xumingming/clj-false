@@ -118,8 +118,22 @@
   (assert (contains? (:vars context) name))
   (update-in context [:stacks] conj ((:vars context) name)))
 
-(defn print-int [i]
-  (print i))
+(defn print-int [context i]
+  (print i)
+  context)
+
+(defn print-char [context ch]
+  (print (char ch))
+  context)
+
+(defn __read-char [context]
+  (let [ch (.read System/in)
+        context (update-in context [:stacks] conj ch)]
+    context))
+
+(defn __flush [context]
+  (flush)
+  context)
 
 (defn pop-n-stack
   "Pops n stack frames from top.
@@ -233,6 +247,9 @@
 ;; APPLY is just a skeleton: pcnt and func are nil, because
 ;; the real function is the function applied
 (def ^:const APPLY (func "!" 1 nil))
+(def ^:const PRINT-INT (func "." 1 print-int))
+(def ^:const PRINT-CHAR (func "," 1 print-char))
+(def ^:const READ-CHAR (func "^" 0 __read-char))
 
 (defn parse [program]
   (loop [commands []]))
