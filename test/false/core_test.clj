@@ -66,12 +66,31 @@
   (testing "testing ! again again"
     (is (= (execute* [1 (custom-func [1 ADD 100 MINUS ADD]) APPLY]) {:stacks [-98] :vars {}})))
 
+  (testing "testing ! throws Exception when there is not enough value on stack for subroutine"
+    (is (thrown? Exception (execute* [1 (custom-func [1 ADD ADD]) APPLY]))))
+
+  (testing "testing ! runs ok when there is enough value on stack"
+    (is (= (execute* [1 2 (custom-func [1 ADD ADD]) APPLY])) {:stacks [4] :vars {}}))
+  
   (testing "testing : ; !"
     (is (= (execute* [1 \a ASSIGNVAR \a READVAR (custom-func [1 ADD]) APPLY]) {:stacks [2] :vars {\a 1}})))
 
   (testing "testing ?"
-    (is (= (execute* [1 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {}})))
+    (is (= (execute* [1 1 EQ? (custom-func [1 2 ADD]) IF])
+           {:stacks [3] :vars {}})))
 
+  (testing "testing ? with constant true"
+    (is (= (execute* [TRUE (custom-func [1 2 ADD]) IF])
+           {:stacks [3] :vars {}})))
+  
+  (testing "testing ? with constant true"
+    (is (= (execute* [FALSE (custom-func [1 2 ADD]) IF])
+           {:stacks [] :vars {}})))
+  
+  (testing "testing ? with assign-var in action"
+    (is (= (execute* [1 1 EQ? (custom-func [1 \a ASSIGNVAR \a READVAR 2 ADD]) IF])
+           {:stacks [3] :vars {\a 1}})))
+  
   (testing "testing ? again"
     (is (= (execute* [1 2 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [] :vars {}})))  
 
@@ -79,4 +98,5 @@
     (is (= (execute* [1 \a ASSIGNVAR \a READVAR 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
 
   (testing "testing if again"
-    (is (= (execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {}}))))
+    (is (= (execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF])
+           {:stacks [3] :vars {}}))))

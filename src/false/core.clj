@@ -46,11 +46,15 @@
 
      :else (Integer/valueOf (.toString sb)))))
 
-(defn func [name pcnt func & {:keys [custom?]}]
+(defn func [name pcnt func & {:keys [commands]}]
   {:name name
    :pcnt pcnt
    :func func
-   :custom? (boolean custom?)})
+   :commands (vec commands)})
+
+(defn custom-func [commands]
+  (let [name (str "cf_" (RT/nextID))]
+    (func name nil nil :commands commands)))
 
 (defn func?
   "whether x is a FALSE function"
@@ -60,33 +64,12 @@
 (defn custom-func?
   "whether x is a FALSE function"
   [x]
-  (and (func? x) (:custom? x)))
+  (and (func? x) (seq (:commands x))))
 
 (defn same-fn?
   "Whether x and y are the same fn?"
   [x y]
   (= (:name x) (:name y)))
-
-(defn get-custom-func-pcnt [commands]
-  (let [[func idx] (loop [idx 0]
-                     (if (func? (nth commands idx))
-                       [(nth commands idx) idx]
-                       (recur (inc idx))))]
-    (- (:pcnt func) idx)))
-
-(declare execute*)
-(defn mk-custom-func
-  "Makes the custom function."
-  [commands]
-  (fn [context & params]
-    (let [commands (concat params commands)]
-      (execute* commands (:vars context)))))
-
-(defn custom-func [commands]
-  (let [name (str "cf_" (RT/nextID))
-        pcnt (get-custom-func-pcnt commands)
-        afn (mk-custom-func commands)]
-    (func name pcnt afn :custom? true)))
 
 (def ^:const TRUE -1)
 (def ^:const FALSE 0)
@@ -102,13 +85,22 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
+(declare execute-custom-func execute*)
 (defn __if [context iftest action]
-  (let [iftest (if (custom-func? iftest)
-                 (first (:stacks ((:func iftest) (:vars context))))
+  (let [context (if (custom-func? iftest)
+                  (execute-custom-func context iftest)
+                  context)
+        iftest (if (custom-func? iftest)
+                 (peek (:stacks context))
                  iftest)
-        ret (when (= iftest TRUE)
-              ((:func action) (:vars context)))]
-    (update-in context [:stacks] #(vec (concat % (:stacks ret))))))
+        context (update-in context [:stacks] #(vec (drop-last %)))]
+    (if (= iftest TRUE)
+      (let [ret (execute-custom-func context action)
+            context (update-in context [:stacks] #(vec (concat % (:stacks ret))))
+            context (update-in context [:vars] #(merge % (:vars ret)))]
+        context)
+      context)))
+
 
 (defn assign-var [context v n]
   (assoc-in context [:vars n] v))
@@ -230,7 +222,7 @@
 (def ^:const IF (func "?" 2 __if))
 ;; APPLY is just a skeleton: pcnt and func are nil, because
 ;; the real function is the function applied
-(def ^:const APPLY (func "!" nil nil))
+(def ^:const APPLY (func "!" 1 nil))
 
 (defn parse [program]
   (loop [commands []]))
@@ -238,46 +230,46 @@
 
 ;; ===== stack-based commands execution ======
 
+(defn execute-custom-func
+  [context cfn]
+  (let [commands (:commands cfn)
+        stacks (:stacks context)
+        vars (:vars context)]
+    (execute* commands stacks vars)))
+
 (defn execute-func
   "Executes the specified function"
   [func context]
   (let [{:keys [stacks vars]} context
-        pcnt (if (same-fn? func APPLY)
-               (:pcnt (peek stacks))
-               (:pcnt func))
-        stacks-to-pop (if (= func APPLY)
-                        (inc pcnt)
-                        pcnt)
-        [stacks params] (pop-n-stack stacks stacks-to-pop)
+        pcnt (:pcnt func)
+        [stacks params] (pop-n-stack stacks pcnt)
         [real-func params] (if (same-fn? func APPLY)
-                             [(last params) (drop-last params)]
-                             [func params])
-        real-func (if (same-fn? func APPLY)
-                    (update-in real-func [:func] (fn [orig-fn]
-                                                   (fn [context & params]
-                                                     (let [ret (apply orig-fn (cons context params))
-                                                           sub-stacks (:stacks ret)]
-                                                       (assoc-in context [:stacks] (vec (concat (:stacks context) sub-stacks)))))))
-                    real-func)]
-    (apply (:func real-func) (cons {:stacks stacks :vars vars}
-                                   params))))
+                             [(first params) params]
+                             [func params])]
+    (if (same-fn? func APPLY)
+      (execute-custom-func {:stacks stacks :vars vars} real-func)
+      (apply (:func real-func) (cons {:stacks stacks :vars vars}
+                                     params)))))
+
 
 (defn execute*
   "Executes commands"
   ([commands]
-     (execute* commands {}))
-  ([commands vars]
+     (execute* commands [] {}))
+  ([commands stacks]
+     (execute* commands stacks {}))
+  ([commands stacks vars]
      (loop [commands commands
-            stacks []
+            stacks stacks
             vars vars]
        (if (seq commands)
          (let [command (first commands)
                commands (rest commands)
                [stacks vars] (if  (and (func? command)
-                                            (not (:custom? command)))
-                                    (let [ret (execute-func command {:stacks stacks :vars vars})]
-                                      [(:stacks ret) (:vars ret)])
-                                    [(conj stacks command) vars])]
+                                       (not (custom-func? command)))
+                               (let [ret (execute-func command {:stacks stacks :vars vars})]
+                                 [(:stacks ret) (:vars ret)])
+                               [(conj stacks command) vars])]
            (recur commands stacks vars))
          {:stacks stacks :vars vars}))))
 
