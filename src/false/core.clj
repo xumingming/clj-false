@@ -7,47 +7,30 @@
   (list 'set! what (list f what)))
 
 (defprotocol Reader
-  (read-char [this] "read the next char."))
+  (read-char [this] "read the next char.")
+  (unread-char [this ch] "unread the char"))
 
-(def EOF -1)
-(deftype FalseReader [program ^:unsynchronized-mutable idx]
+(def EOF ::EOF)
+(deftype FalseReader [program ^:unsynchronized-mutable idx buf
+                      ^:unsynchronized-mutable buf-pos]
   Reader
   (read-char [this]
-    (if (< idx (count program))
-      (let [ret (char (nth program idx))]
-        (update! idx inc)
+    (if (>= buf-pos 0)
+      (let [ret (char (aget buf buf-pos))]
+        (update! buf-pos dec)
         ret)
-      EOF)))
+      (if (< idx (count program))
+        (let [ret (char (nth program idx))]
+          (update! idx inc)
+          ret)
+        EOF)))
+  (unread-char [this ch]
+    (update! buf-pos inc)
+    (aset buf buf-pos ch)))
 
 (defn false-reader [program]
-  (FalseReader. program 0))
+  (FalseReader. program 0 (object-array 10) -1))
 
-(defn read-error [reader msg]
-  (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
-
-(defn escape-char [&_]
-  \")
-
-(defn read-string*
-  [reader initch]
-  (loop [sb (StringBuilder.)
-         ch (read-char reader)]
-    (case ch
-      nil (read-error reader "EOF while reading string")
-      \\ (recur (doto sb (.append ch))
-                (read-char reader))
-      \" (str sb)
-      (recur (doto sb (.append ch)) (read-char reader)))))
-
-(defn read-number
-  [reader initch]
-  (loop [sb (StringBuilder. (str initch))
-         ch (read-char reader)]
-    (cond
-     (#{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9} ch)
-     (recur (.append sb ch) (read-char reader))
-
-     :else (Integer/valueOf (.toString sb)))))
 
 (defn func [name pcnt func & {:keys [commands]}]
   {:name name
@@ -231,32 +214,32 @@
   (update-in context [:stacks] conj (if (__not x) TRUE FALSE)))
 
 ;; all the functions in FALSE
-(def ^:const ADD (func "+" 2 __add))
-(def ^:const SUBSTRACT (func "-" 2 __substract))
-(def ^:const MULTIPLY (func "*" 2 __multiply))
-(def ^:const DEVIDE (func "/" 2 __devide))
-(def ^:const MINUS (func "_" 1 __minus))
+(def ADD (func "+" 2 __add))
+(def SUBSTRACT (func "-" 2 __substract))
+(def MULTIPLY (func "*" 2 __multiply))
+(def DEVIDE (func "/" 2 __devide))
+(def MINUS (func "_" 1 __minus))
 ;; -1 means true, 0 means false
-(def ^:const EQ? (func "=" 2 __eq?))
-(def ^:const GT? (func ">" 2 __gt?))
-(def ^:const AND? (func "&" 2 __and?))
-(def ^:const OR? (func "|" 2 __or?))
-(def ^:const NOT? (func "~" 1 __not?))
+(def EQ? (func "=" 2 __eq?))
+(def GT? (func ">" 2 __gt?))
+(def AND? (func "&" 2 __and?))
+(def OR? (func "|" 2 __or?))
+(def NOT? (func "~" 1 __not?))
 
-(def ^:const DUP (func "$" 0 dup-top-stack))
-(def ^:const DEL (func "%" 0 del-top-stack))
-(def ^:const ROTATE (func "@" 0 rotate-3rd-stack))
-(def ^:const COPYN (func "ø" 1 copy-nth-stack))
-(def ^:const ASSIGNVAR (func ":" 2 assign-var))
-(def ^:const READVAR (func ";" 1 read-var))
-(def ^:const IF (func "?" 2 __if))
-(def ^:const WHILE (func "#" 2 __while))
+(def DUP (func "$" 0 dup-top-stack))
+(def DEL (func "%" 0 del-top-stack))
+(def ROTATE (func "@" 0 rotate-3rd-stack))
+(def COPYN (func "ø" 1 copy-nth-stack))
+(def ASSIGNVAR (func ":" 2 assign-var))
+(def READVAR (func ";" 1 read-var))
+(def IF (func "?" 2 __if))
+(def WHILE (func "#" 2 __while))
 ;; APPLY is just a skeleton: pcnt and func are nil, because
 ;; the real function is the function applied
-(def ^:const APPLY (func "!" 1 nil))
-(def ^:const PRINT-INT (func "." 1 print-int))
-(def ^:const PRINT-CHAR (func "," 1 print-char))
-(def ^:const READ-CHAR (func "^" 0 __read-char))
+(def APPLY (func "!" 1 nil))
+(def PRINT-INT (func "." 1 print-int))
+(def PRINT-CHAR (func "," 1 print-char))
+(def READ-CHAR (func "^" 0 __read-char))
 (def SYS-SYMBOLS
   {\+ ADD
    \- SUBSTRACT
@@ -279,22 +262,83 @@
    \, PRINT-CHAR
    \^ READ-CHAR})
 
+(defn- whitespace?
+  "Checks whether a given character is whitespace"
+  [ch]
+  (when ch
+    (Character/isWhitespace ^Character ch)))
+
+(defn- number-ch?
+  [ch]
+  (contains? #{\0 \1 \2
+               \3 \4 \5
+               \6 \7 \8
+               \9} ch))
+
+(defn read-error [reader msg]
+  (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
+
+(defn escape-char [&_]
+  \")
+
+
+(defn read-delimited
+  [reader end-del]
+  (loop [sb (StringBuilder.)
+         ch (read-char reader)]
+    (condp = ch
+      EOF (read-error reader "EOF while reading string")
+      end-del (str sb)
+      (recur (doto sb (.append ch)) (read-char reader)))))
+
+(defn read-string*
+  [reader _]
+  (read-delimited reader \"))
+
+(declare parse)
+(defn read-subroutine
+  [reader _]
+  (let [routine-str (read-delimited reader \])
+        sub-commands (parse routine-str)]
+    (custom-func sub-commands)))
+
+(defn read-number
+  [reader initch]
+  (loop [sb (StringBuilder. (str initch))
+         ch (read-char reader)]
+    (cond
+     (#{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9} ch)
+     (recur (.append sb ch) (read-char reader))
+
+     :else (do (unread-char reader ch)
+               (Integer/valueOf (.toString sb))))))
+
 (defn parse [program]
   (let [reader (false-reader program)]
     (loop [commands []
            ch (read-char reader)]
       (if (= EOF ch)
         commands
-        (let [func (SYS-SYMBOLS ch)
-              func (if-not (nil? func)
-                     func
-                     (cond 
-                      (= \" ch) (read-string* reader ch)
-                      (contains? #{\0 \1 \2
-                                  \3 \4 \5
-                                  \6 \7 \8
-                                  \9} ch) (read-number reader ch)))]
-          (recur (conj commands func) (read-char reader)))))))
+        (if (not (nil? (SYS-SYMBOLS ch)))
+          (recur (conj commands (SYS-SYMBOLS ch))
+                 (read-char reader))
+          (cond
+           (= \" ch)
+           (recur (conj commands (read-string* reader ch))
+                  (read-char reader))
+
+           (= \[ ch)
+           (recur (conj commands (read-subroutine reader ch))
+                  (read-char reader))
+
+           (whitespace? ch)
+           (recur commands
+                  (read-char reader))
+
+           (number-ch? ch)
+           (recur (conj commands (read-number reader ch))
+                  (read-char reader))
+           ))))))
 
 ;; ===== stack-based commands execution ======
 

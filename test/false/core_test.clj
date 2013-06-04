@@ -3,12 +3,23 @@
         false.core)
   (import java.io.StringWriter))
 
-(deftest test-reader
+(deftest test-parser
   (testing "test basic parsing"
-    (is (= (parse "1 2 +") [1 2 ADD])))
+    (is (= (parse "1 2 +") [1 2 ADD]))
+    (is (= (parse "1 2+") [1 2 ADD])))
 
-  (testing "test basic parsing"
-   (is (= (parse "\"hello\"") [1 2 ADD]))))
+  (testing "test parse string"
+    (is (= (parse "\"hello\"") ["hello"])))
+
+  (testing "test parse subroutine"
+    (let [commands (parse "[1 2+]")]
+      (is (= 1 (count commands)))
+      (is (map? (first commands)))
+      (let [sub-commands (:commands (first commands))]
+        (is (= 3 (count sub-commands)))
+        (is (= 1 (first sub-commands)))
+        (is (= 2 (second sub-commands)))
+        (is (map? (last sub-commands)))))))
 
 (deftest test-executor
   (testing "testing +"
@@ -138,5 +149,5 @@
 
     (let [wr (StringWriter.)]
       (binding [*out* wr]
-        (run "hello"))
+        (run "\"hello\""))
       (is (= "hello" (str wr))))))
