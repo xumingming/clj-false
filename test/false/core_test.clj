@@ -3,6 +3,13 @@
         false.core)
   (import java.io.StringWriter))
 
+(deftest test-reader
+  (testing "test basic parsing"
+    (is (= (parse "1 2 +") [1 2 ADD])))
+
+  (testing "test basic parsing"
+   (is (= (parse "\"hello\"") [1 2 ADD]))))
+
 (deftest test-executor
   (testing "testing +"
     (is (= (execute* [1 2 ADD]) {:stacks [3] :vars {}})))
@@ -122,3 +129,14 @@
         (execute* [65 PRINT-CHAR]))
       (is (= "A" (str wr)))))  
   )
+
+
+(deftest test-run
+  (testing "test basic run"
+    (is (= (run "1 2 +") 3))
+    (is (= (run "1 2+") 3))
+
+    (let [wr (StringWriter.)]
+      (binding [*out* wr]
+        (run "hello"))
+      (is (= "hello" (str wr))))))

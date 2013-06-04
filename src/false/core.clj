@@ -1,5 +1,6 @@
 (ns false.core
-  (:import [clojure.lang RT]))
+  (:import [clojure.lang RT])
+  (:require [clojure.string :as str]))
 
 ;; ===== FALSE Reader related =====
 (defmacro ^:private update! [what f]
@@ -8,15 +9,17 @@
 (defprotocol Reader
   (read-char [this] "read the next char."))
 
+(def EOF -1)
 (deftype FalseReader [program ^:unsynchronized-mutable idx]
   Reader
   (read-char [this]
-    (assert (< idx (count program)))
-    (let [ret (char (nth program idx))]
-      (update! idx inc)
-      ret)))
+    (if (< idx (count program))
+      (let [ret (char (nth program idx))]
+        (update! idx inc)
+        ret)
+      EOF)))
 
-(defn reader [program]
+(defn false-reader [program]
   (FalseReader. program 0))
 
 (defn read-error [reader msg]
@@ -26,19 +29,19 @@
   \")
 
 (defn read-string*
-  [reader]
+  [reader initch]
   (loop [sb (StringBuilder.)
          ch (read-char reader)]
     (case ch
       nil (read-error reader "EOF while reading string")
-      \\ (recur (doto sb (.append (escape-char sb reader)))
+      \\ (recur (doto sb (.append ch))
                 (read-char reader))
       \" (str sb)
       (recur (doto sb (.append ch)) (read-char reader)))))
 
 (defn read-number
-  [reader]
-  (loop [sb (StringBuilder.)
+  [reader initch]
+  (loop [sb (StringBuilder. (str initch))
          ch (read-char reader)]
     (cond
      (#{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9} ch)
@@ -124,6 +127,10 @@
 
 (defn print-char [context ch]
   (print (char ch))
+  context)
+
+(defn print-string [context str]
+  (print str)
   context)
 
 (defn __read-char [context]
@@ -234,7 +241,7 @@
 (def ^:const GT? (func ">" 2 __gt?))
 (def ^:const AND? (func "&" 2 __and?))
 (def ^:const OR? (func "|" 2 __or?))
-(def ^:const NOT? (func "|" 1 __not?))
+(def ^:const NOT? (func "~" 1 __not?))
 
 (def ^:const DUP (func "$" 0 dup-top-stack))
 (def ^:const DEL (func "%" 0 del-top-stack))
@@ -250,10 +257,44 @@
 (def ^:const PRINT-INT (func "." 1 print-int))
 (def ^:const PRINT-CHAR (func "," 1 print-char))
 (def ^:const READ-CHAR (func "^" 0 __read-char))
+(def SYS-SYMBOLS
+  {\+ ADD
+   \- SUBSTRACT
+   \_ MINUS
+   \= EQ?
+   \> GT?
+   \& AND?
+   \| OR?
+   \~ NOT?
+   \$ DUP
+   \% DEL
+   \@ ROTATE
+   \ø COPYN
+   \: ASSIGNVAR
+   \; READVAR
+   \? IF
+   \# WHILE
+   \! APPLY
+   \. PRINT-INT
+   \, PRINT-CHAR
+   \^ READ-CHAR})
 
 (defn parse [program]
-  (loop [commands []]))
-
+  (let [reader (false-reader program)]
+    (loop [commands []
+           ch (read-char reader)]
+      (if (= EOF ch)
+        commands
+        (let [func (SYS-SYMBOLS ch)
+              func (if-not (nil? func)
+                     func
+                     (cond 
+                      (= \" ch) (read-string* reader ch)
+                      (contains? #{\0 \1 \2
+                                  \3 \4 \5
+                                  \6 \7 \8
+                                  \9} ch) (read-number reader ch)))]
+          (recur (conj commands func) (read-char reader)))))))
 
 ;; ===== stack-based commands execution ======
 
@@ -292,11 +333,19 @@
        (if (seq commands)
          (let [command (first commands)
                commands (rest commands)
-               [stacks vars] (if  (and (func? command)
-                                       (not (custom-func? command)))
-                               (let [ret (execute-func command {:stacks stacks :vars vars})]
-                                 [(:stacks ret) (:vars ret)])
-                               [(conj stacks command) vars])]
+               {:keys [stacks vars]} (cond
+                                      (and (func? command)
+                                           (not (custom-func? command)))
+                                      (let [ret (execute-func command {:stacks stacks :vars vars})]
+                                        {:stacks (:stacks ret)
+                                         :vars (:vars ret)})
+                               
+                                      (string? command)
+                                      (print-string {:stacks stacks :vars vars} command)
+                               
+                                      :else
+                                      {:stacks (conj stacks command)
+                                       :vars vars})]
            (recur commands stacks vars))
          {:stacks stacks :vars vars}))))
 
@@ -305,3 +354,13 @@
   (let [ret (execute* commands)]
     (first (:stacks ret))))
 
+
+;; ===== compose parser and executor together
+(defn run [program]
+  (let [commands (parse program)
+        result (execute commands)]
+    result))
+
+
+(defn -main [file-path]
+  (run (str/trim (slurp file-path))))
