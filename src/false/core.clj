@@ -158,6 +158,18 @@
   [context]
   (update-in context [:stacks] #(vec (drop-last %))))
 
+(defn swap-top-2-stack
+  "Deletes stack top.
+
+  e.g. (swap-top-2-stack [1 2 3]) => [1 3 2]"
+  [context]
+  (let [stacks (:stacks context)
+        [stacks poped-stacks] (pop-n-stack stacks 2)
+        stacks (conj stacks (second poped-stacks)
+                     (first poped-stacks))]
+    {:stacks stacks
+     :vars (:vars context)}))
+
 (defn rotate-3rd-stack
   "Rotate third stack frame to stack top
 
@@ -228,6 +240,7 @@
 
 (def DUP (func "$" 0 dup-top-stack))
 (def DEL (func "%" 0 del-top-stack))
+(def SWAP (func "\\" 0 swap-top-2-stack))
 (def ROTATE (func "@" 0 rotate-3rd-stack))
 (def COPYN (func "ø" 1 copy-nth-stack))
 (def ASSIGN-VAR (func ":" 2 assign-var))

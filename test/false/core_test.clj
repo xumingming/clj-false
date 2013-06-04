@@ -61,6 +61,9 @@
   (testing "testing $"
     (is (= (execute* [1 DUP]) {:stacks [1 1] :vars {}})))
 
+  (testing "testing \\"
+    (is (= (execute* [1 2 3 SWAP]) {:stacks [1 3 2] :vars {}})))
+ 
   (testing "testing %"
     (is (= (execute* [1 2 DEL]) {:stacks [1] :vars {}})))
 
