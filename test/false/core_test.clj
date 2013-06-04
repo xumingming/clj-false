@@ -13,7 +13,10 @@
 
   (testing "test parse comments"
     (is (= (parse "{this is comments}1 2 +") [1 2 ADD])))
-    
+
+  (testing "test parse char"
+    (is (= (parse "'A") [65])))
+
   (testing "test parse subroutine"
     (let [commands (parse "[1 2+]")]
       (is (= 1 (count commands)))

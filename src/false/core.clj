@@ -116,7 +116,7 @@
   (print str)
   context)
 
-(defn __read-char [context]
+(defn read-char-from-stdin [context]
   (let [ch (.read System/in)
         context (update-in context [:stacks] conj ch)]
     context))
@@ -252,7 +252,7 @@
 (def APPLY (func "!" 1 nil))
 (def PRINT-INT (func "." 1 print-int))
 (def PRINT-CHAR (func "," 1 print-char))
-(def READ-CHAR (func "^" 0 __read-char))
+(def READ-CHAR (func "^" 0 read-char-from-stdin))
 (def SYS-SYMBOLS
   {\+ ADD
    \- SUBSTRACT
@@ -291,9 +291,8 @@
 (defn read-error [reader msg]
   (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
 
-(defn escape-char [&_]
-  \")
-
+(defn read-false-char-as-int [reader _]
+  (int (read-char reader)))
 
 (defn read-delimited
   [reader end-del]
@@ -349,6 +348,10 @@
              (read-comments reader ch)
              (recur commands
                     (read-char reader)))
+
+           (= \' ch)
+           (recur (conj commands (read-false-char-as-int reader ch))
+                  (read-char reader))
            
            (= \[ ch)
            (recur (conj commands (read-subroutine reader ch))
