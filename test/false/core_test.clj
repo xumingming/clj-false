@@ -169,3 +169,7 @@
       (binding [*out* wr]
         (run "\"hello\""))
       (is (= "hello" (str wr))))))
+
+(deftest integration-test
+  (testing "test assign var, read var subroutine, if"
+    (is (= 4 (run "1a:a;1=[3b:]?1b;+")))))
