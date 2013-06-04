@@ -285,6 +285,12 @@
   [ch]
   (Character/isDigit ch))
 
+(defn- low-letter?
+  [ch]
+  (let [int-ch (int ch)]
+    (and (>= int-ch 97)
+         (<= int-ch 122))))
+
 (defn read-error [reader msg]
   (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
 
@@ -348,6 +354,10 @@
 
            (= \' ch)
            (recur (conj commands (read-false-char-as-int reader ch))
+                  (read-char reader))
+
+           (low-letter? ch)
+           (recur (conj commands ch)
                   (read-char reader))
            
            (= \[ ch)

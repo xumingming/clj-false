@@ -17,6 +17,15 @@
   (testing "test parse char"
     (is (= (parse "'A") [65])))
 
+  (testing "test parse var"
+    (is (= (parse "a") [\a])))
+
+  (testing "test parse var"
+    (is (= (parse "abc") [\a \b \c])))
+
+  (testing "test parse var"
+    (is (= (parse "1 a:") [1 \a ASSIGN-VAR])))
+
   (testing "test parse subroutine"
     (let [commands (parse "[1 2+]")]
       (is (= 1 (count commands)))
