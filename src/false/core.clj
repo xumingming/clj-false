@@ -230,8 +230,8 @@
 (def DEL (func "%" 0 del-top-stack))
 (def ROTATE (func "@" 0 rotate-3rd-stack))
 (def COPYN (func "ø" 1 copy-nth-stack))
-(def ASSIGNVAR (func ":" 2 assign-var))
-(def READVAR (func ";" 1 read-var))
+(def ASSIGN-VAR (func ":" 2 assign-var))
+(def READ-VAR (func ";" 1 read-var))
 (def IF (func "?" 2 __if))
 (def WHILE (func "#" 2 __while))
 ;; APPLY is just a skeleton: pcnt and func are nil, because
@@ -253,8 +253,8 @@
    \% DEL
    \@ ROTATE
    \ø COPYN
-   \: ASSIGNVAR
-   \; READVAR
+   \: ASSIGN-VAR
+   \; READ-VAR
    \? IF
    \# WHILE
    \! APPLY

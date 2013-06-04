@@ -68,13 +68,13 @@
     (is (= (execute* [1 2 3 4 2 COPYN]) {:stacks [1 2 3 4 2] :vars {}})))
 
   (testing "testing :"
-    (is (= (execute* [1 \a ASSIGNVAR]) {:stacks [] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR]) {:stacks [] :vars {\a 1}})))
 
   (testing "testing ;"
-    (is (= (execute* [1 \a ASSIGNVAR \a READVAR]) {:stacks [1] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR]) {:stacks [1] :vars {\a 1}})))
   
   (testing "testing : ; +"
-    (is (= (execute* [1 \a ASSIGNVAR \a READVAR 3 ADD]) {:stacks [4] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR 3 ADD]) {:stacks [4] :vars {\a 1}})))
 
   (testing "testing !"
     (is (= (execute* [(custom-func [1 2 ADD]) APPLY]) {:stacks [3] :vars {}})))
@@ -92,7 +92,7 @@
     (is (= (execute* [1 2 (custom-func [1 ADD ADD]) APPLY])) {:stacks [4] :vars {}}))
   
   (testing "testing : ; !"
-    (is (= (execute* [1 \a ASSIGNVAR \a READVAR (custom-func [1 ADD]) APPLY]) {:stacks [2] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR (custom-func [1 ADD]) APPLY]) {:stacks [2] :vars {\a 1}})))
 
   (testing "testing ?"
     (is (= (execute* [1 1 EQ? (custom-func [1 2 ADD]) IF])
@@ -107,25 +107,25 @@
            {:stacks [] :vars {}})))
   
   (testing "testing ? with assign-var in action"
-    (is (= (execute* [1 1 EQ? (custom-func [1 \a ASSIGNVAR \a READVAR 2 ADD]) IF])
+    (is (= (execute* [1 1 EQ? (custom-func [1 \a ASSIGN-VAR \a READ-VAR 2 ADD]) IF])
            {:stacks [3] :vars {\a 1}})))
   
   (testing "testing ? again"
     (is (= (execute* [1 2 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [] :vars {}})))  
 
   (testing "testing : ; ?"
-    (is (= (execute* [1 \a ASSIGNVAR \a READVAR 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
 
   (testing "testing ? again"
     (is (= (execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF])
            {:stacks [3] :vars {}})))
 
   (testing "testing #"
-    (is (= (execute* [2 \a ASSIGNVAR (custom-func [\a READVAR 0 GT?]) (custom-func [\a READVAR 1 SUBSTRACT \a ASSIGNVAR]) WHILE])
+    (is (= (execute* [2 \a ASSIGN-VAR (custom-func [\a READ-VAR 0 GT?]) (custom-func [\a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
            {:stacks [] :vars {\a 0}})))
 
   (testing "testing #"
-    (is (= (execute* [1 1 \a ASSIGNVAR (custom-func [\a READVAR 0 GT?]) (custom-func [2 ADD \a READVAR 1 SUBSTRACT \a ASSIGNVAR]) WHILE])
+    (is (= (execute* [1 1 \a ASSIGN-VAR (custom-func [\a READ-VAR 0 GT?]) (custom-func [2 ADD \a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
            {:stacks [3] :vars {\a 0}})))
 
   (testing "testing ."
