@@ -281,12 +281,9 @@
   (when ch
     (Character/isWhitespace ^Character ch)))
 
-(defn- number-ch?
+(defn- digit?
   [ch]
-  (contains? #{\0 \1 \2
-               \3 \4 \5
-               \6 \7 \8
-               \9} ch))
+  (Character/isDigit ch))
 
 (defn read-error [reader msg]
   (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
@@ -361,7 +358,7 @@
            (recur commands
                   (read-char reader))
 
-           (number-ch? ch)
+           (digit? ch)
            (recur (conj commands (read-number reader ch))
                   (read-char reader))
            ))))))
