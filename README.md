@@ -7,7 +7,7 @@
 ```bash
 $ git clone https://github.com/xumingming/clj-false
 $ cd clj-false
-$ lein run examples/hello.f
+$ lein run examples/helloworld.f
 ```
 
 ## License
