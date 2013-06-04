@@ -11,6 +11,9 @@
   (testing "test parse string"
     (is (= (parse "\"hello\"") ["hello"])))
 
+  (testing "test parse comments"
+    (is (= (parse "{this is comments}1 2 +") [1 2 ADD])))
+    
   (testing "test parse subroutine"
     (let [commands (parse "[1 2+]")]
       (is (= 1 (count commands)))

@@ -295,6 +295,10 @@
   [reader _]
   (read-delimited reader \"))
 
+(defn read-comments
+  [reader _]
+  (read-delimited reader \}))
+
 (declare parse)
 (defn read-subroutine
   [reader _]
@@ -327,6 +331,12 @@
            (recur (conj commands (read-string* reader ch))
                   (read-char reader))
 
+           (= \{ ch)
+           (do
+             (read-comments reader ch)
+             (recur commands
+                    (read-char reader)))
+           
            (= \[ ch)
            (recur (conj commands (read-subroutine reader ch))
                   (read-char reader))
