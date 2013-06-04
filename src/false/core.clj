@@ -8,10 +8,15 @@
 
 (defprotocol Reader
   (read-char [this] "read the next char.")
-  (unread-char [this ch] "unread the char"))
+  (unread-char [this ch] "unread the char")
+  (get-pos [this] "current pos"))
 
 (def EOF ::EOF)
-(deftype FalseReader [program ^:unsynchronized-mutable idx buf
+(defn eof?
+  [ch]
+  (= EOF ch))
+
+(deftype FalseReader [program ^:unsynchronized-mutable pos buf
                       ^:unsynchronized-mutable buf-pos]
   Reader
   (read-char [this]
@@ -19,14 +24,15 @@
       (let [ret (char (aget buf buf-pos))]
         (update! buf-pos dec)
         ret)
-      (if (< idx (count program))
-        (let [ret (char (nth program idx))]
-          (update! idx inc)
+      (if (< pos (count program))
+        (let [ret (char (nth program pos))]
+          (update! pos inc)
           ret)
         EOF)))
   (unread-char [this ch]
     (update! buf-pos inc)
-    (aset buf buf-pos ch)))
+    (aset buf buf-pos ch))
+  (get-pos [this] pos))
 
 (defn false-reader [program]
   (FalseReader. program 0 (object-array 10) -1))
@@ -256,6 +262,8 @@
 (def SYS-SYMBOLS
   {\+ ADD
    \- SUBSTRACT
+   \* MULTIPLY
+   \/ DEVIDE
    \_ MINUS
    \= EQ?
    \> GT?
@@ -264,6 +272,7 @@
    \~ NOT?
    \$ DUP
    \% DEL
+   \\ SWAP
    \@ ROTATE
    \ø COPYN
    \: ASSIGN-VAR
@@ -281,7 +290,7 @@
   (when ch
     (Character/isWhitespace ^Character ch)))
 
-(defn- digit?
+(defn digit?
   [ch]
   (Character/isDigit ch))
 
@@ -292,7 +301,7 @@
          (<= int-ch 122))))
 
 (defn read-error [reader msg]
-  (throw (RuntimeException. (str msg ", idx: " (:idx reader)))))
+  (throw (RuntimeException. (str msg ", pos:" (get-pos reader)))))
 
 (defn read-false-char-as-int [reader _]
   (int (read-char reader)))
@@ -302,7 +311,7 @@
   (loop [sb (StringBuilder.)
          ch (read-char reader)]
     (condp = ch
-      EOF (read-error reader "EOF while reading string")
+      EOF (read-error reader (str "EOF while reading delimited, end-del: " end-del ))
       end-del (str sb)
       (recur (doto sb (.append ch)) (read-char reader)))))
 
@@ -325,12 +334,12 @@
   [reader initch]
   (loop [sb (StringBuilder. (str initch))
          ch (read-char reader)]
-    (cond
-     (#{\0 \1 \2 \3 \4 \5 \6 \7 \8 \9} ch)
-     (recur (.append sb ch) (read-char reader))
-
-     :else (do (unread-char reader ch)
-               (Integer/valueOf (.toString sb))))))
+    (if (eof? ch)
+      (Integer/valueOf (.toString sb))
+      (if (digit? ch)
+        (recur (.append sb ch) (read-char reader))
+        (do (unread-char reader ch)
+          (Integer/valueOf (.toString sb)))))))
 
 (defn parse [program]
   (let [reader (false-reader program)]

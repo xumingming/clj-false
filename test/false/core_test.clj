@@ -4,6 +4,9 @@
   (import java.io.StringWriter))
 
 (deftest test-parser
+  (testing "test parse number"
+    (is (= (parse "1") 1)))
+  
   (testing "test basic parsing"
     (is (= (parse "1 2 +") [1 2 ADD]))
     (is (= (parse "1 2+") [1 2 ADD])))
@@ -172,4 +175,7 @@
 
 (deftest integration-test
   (testing "test assign var, read var subroutine, if"
-    (is (= 4 (run "1a:a;1=[3b:]?1b;+")))))
+    (is (= 4 (run "1a:a;1=[3b:]?1b;+"))))
+
+  (testing "testing prime"
+    (is (= 1 (run "99 9[1-$][\$@$@$@$@\/*=[1-$$[%\1-$@]?0=[\$.' ,\]?]?]#")))))
