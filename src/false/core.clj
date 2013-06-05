@@ -53,7 +53,7 @@
    :func func
    :commands (vec commands)})
 
-(defn custom-func [commands]
+(defn subroutine [commands]
   (let [name (str "cf_" (RT/nextID))]
     (func name nil nil :commands commands)))
 
@@ -62,7 +62,7 @@
   [x]
   (map? x))
 
-(defn custom-func?
+(defn subroutine?
   "whether x is a FALSE function"
   [x]
   (boolean (and (func? x) (seq (:commands x)))))
@@ -86,29 +86,29 @@
 (defn- __not [a]
   (if (= a TRUE) FALSE TRUE))
 
-(declare execute-custom-func execute*)
+(declare execute-subroutine execute*)
 (defn __if [context iftest action]
-  (let [context (if (custom-func? iftest)
-                  (execute-custom-func context iftest)
+  (let [context (if (subroutine? iftest)
+                  (execute-subroutine context iftest)
                   context)
-        iftest (if (custom-func? iftest)
+        iftest (if (subroutine? iftest)
                  (peek (:stacks context))
                  iftest)
         context (update-in context [:stacks] #(vec (drop-last %)))]
     (if (= iftest TRUE)
-      (execute-custom-func context action)
+      (execute-subroutine context action)
       context)))
 
 (defn __while [context whiletest action]
-  (let [context (if (custom-func? whiletest)
-                  (execute-custom-func context whiletest)
+  (let [context (if (subroutine? whiletest)
+                  (execute-subroutine context whiletest)
                   context)
-        evaled-whiletest (if (custom-func? whiletest)
+        evaled-whiletest (if (subroutine? whiletest)
                            (peek (:stacks context))
                            whiletest)
         context (update-in context [:stacks] #(vec (drop-last %)))]
     (if (= evaled-whiletest TRUE)
-      (recur (execute-custom-func context action) whiletest action)
+      (recur (execute-subroutine context action) whiletest action)
       context)))
 
 
@@ -397,7 +397,7 @@
   "Reads a subroutine from the reader"
   [reader _]
   (let [sub-commands (parse* reader \])]
-    (custom-func sub-commands)))
+    (subroutine sub-commands)))
 
 (defn read-number
   "Reads a number from the reader"
@@ -457,7 +457,7 @@
 
 ;; ===== stack-based commands execution ======
 
-(defn execute-custom-func
+(defn execute-subroutine
   [context cfn]
   (let [commands (:commands cfn)
         stacks (:stacks context)
@@ -474,7 +474,7 @@
                              [(first params) params]
                              [func params])]
     (if (same-fn? func APPLY)
-      (execute-custom-func {:stacks stacks :vars vars} real-func)
+      (execute-subroutine {:stacks stacks :vars vars} real-func)
       (apply (:func real-func) (cons {:stacks stacks :vars vars}
                                      params)))))
 
@@ -494,7 +494,7 @@
                commands (rest commands)
                {:keys [stacks vars]} (cond
                                       (and (func? command)
-                                           (not (custom-func? command)))
+                                           (not (subroutine? command)))
                                       (let [ret (execute-func command {:stacks stacks :vars vars})]
                                         {:stacks (:stacks ret)
                                          :vars (:vars ret)})

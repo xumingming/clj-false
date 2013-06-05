@@ -79,45 +79,45 @@
 
 (deftest test-apply
   (testing "testing !"
-    (is (= (execute* [(custom-func [1 2 ADD]) APPLY]) {:stacks [3] :vars {}}))
-    (is (= (execute* [1 (custom-func [1 ADD]) APPLY]) {:stacks [2] :vars {}}))
-    (is (= (execute* [1 (custom-func [1 ADD 100 MINUS ADD]) APPLY]) {:stacks [-98] :vars {}}))
-    (is (thrown? Exception (execute* [1 (custom-func [1 ADD ADD]) APPLY])))
-    (is (= (execute* [1 2 (custom-func [1 ADD ADD]) APPLY])) {:stacks [4] :vars {}})
-    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR (custom-func [1 ADD]) APPLY]) {:stacks [2] :vars {\a 1}}))))
+    (is (= (execute* [(subroutine [1 2 ADD]) APPLY]) {:stacks [3] :vars {}}))
+    (is (= (execute* [1 (subroutine [1 ADD]) APPLY]) {:stacks [2] :vars {}}))
+    (is (= (execute* [1 (subroutine [1 ADD 100 MINUS ADD]) APPLY]) {:stacks [-98] :vars {}}))
+    (is (thrown? Exception (execute* [1 (subroutine [1 ADD ADD]) APPLY])))
+    (is (= (execute* [1 2 (subroutine [1 ADD ADD]) APPLY])) {:stacks [4] :vars {}})
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR (subroutine [1 ADD]) APPLY]) {:stacks [2] :vars {\a 1}}))))
 
 (deftest test-if
   (testing "testing ?"
-    (is (= (execute* [1 1 EQ? (custom-func [1 2 ADD]) IF])
+    (is (= (execute* [1 1 EQ? (subroutine [1 2 ADD]) IF])
            {:stacks [3] :vars {}})))
 
   (testing "testing ? with constant true"
-    (is (= (execute* [TRUE (custom-func [1 2 ADD]) IF])
+    (is (= (execute* [TRUE (subroutine [1 2 ADD]) IF])
            {:stacks [3] :vars {}})))
   
   (testing "testing ? with constant false"
-    (is (= (execute* [FALSE (custom-func [1 2 ADD]) IF])
+    (is (= (execute* [FALSE (subroutine [1 2 ADD]) IF])
            {:stacks [] :vars {}})))
 
   (testing "testing ? with assign-var in action"
-    (is (= (execute* [1 1 EQ? (custom-func [1 \a ASSIGN-VAR \a READ-VAR 2 ADD]) IF])
+    (is (= (execute* [1 1 EQ? (subroutine [1 \a ASSIGN-VAR \a READ-VAR 2 ADD]) IF])
            {:stacks [3] :vars {\a 1}})))
   (testing "testing ? again"
-    (is (= (execute* [1 2 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [] :vars {}})))
+    (is (= (execute* [1 2 EQ? (subroutine [1 2 ADD]) IF]) {:stacks [] :vars {}})))
 
   (testing "testing : ; ?"
-    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR 1 EQ? (custom-func [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
+    (is (= (execute* [1 \a ASSIGN-VAR \a READ-VAR 1 EQ? (subroutine [1 2 ADD]) IF]) {:stacks [3] :vars {\a 1}})))
 
   (testing "testing ? again"
-    (is (= (execute* [(custom-func [1 1 EQ?]) (custom-func [1 2 ADD]) IF])
+    (is (= (execute* [(subroutine [1 1 EQ?]) (subroutine [1 2 ADD]) IF])
            {:stacks [3] :vars {}}))))
 
 (deftest test-while
   (testing "testing #"
-    (is (= (execute* [2 \a ASSIGN-VAR (custom-func [\a READ-VAR 0 GT?]) (custom-func [\a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
+    (is (= (execute* [2 \a ASSIGN-VAR (subroutine [\a READ-VAR 0 GT?]) (subroutine [\a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
            {:stacks [] :vars {\a 0}})))
   (testing "testing #"
-    (is (= (execute* [1 1 \a ASSIGN-VAR (custom-func [\a READ-VAR 0 GT?]) (custom-func [2 ADD \a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
+    (is (= (execute* [1 1 \a ASSIGN-VAR (subroutine [\a READ-VAR 0 GT?]) (subroutine [2 ADD \a READ-VAR 1 SUBSTRACT \a ASSIGN-VAR]) WHILE])
            {:stacks [3] :vars {\a 0}}))))
 
 (deftest test-print-int

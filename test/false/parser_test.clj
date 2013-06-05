@@ -4,15 +4,15 @@
 (declare false-eq?)
 (defn false-subroutine-eq?
   [x y]
-  (and (custom-func? x)
-       (custom-func? y)
+  (and (subroutine? x)
+       (subroutine? y)
        (false-eq? (:commands x) (:commands y))))
 
 (defn false-eq?
   "Whether two FALSE program equals"
   [x y]
   (let [comp-fn (fn [x y]
-                  (if (custom-func? x)
+                  (if (subroutine? x)
                     (false-subroutine-eq? x y)
                     (= x y)))]
     (and (= (count x) (count y))
@@ -54,8 +54,8 @@
 
 (deftest test-subroutine
   (testing "test parse subroutine"
-    (is (false-eq? (parse "[1 2+]") [(custom-func [1 2 ADD])]))
+    (is (false-eq? (parse "[1 2+]") [(subroutine [1 2 ADD])]))
     (is (false-eq? (parse "[1 2 [1 2+] +]")
-                   [(custom-func [1 2
-                                  (custom-func [1 2 ADD])
+                   [(subroutine [1 2
+                                  (subroutine [1 2 ADD])
                                   ADD])]))))
