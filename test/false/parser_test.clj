@@ -34,7 +34,8 @@
 
 (deftest test-string
   (testing "test parse string"
-    (is (= (parse "\"hello\"") ["hello"]))
+    (is (= (parse "\"hello\"") ["hello"])))
+  (testing "test escape char in string"
     (is (= (parse "\"\\\"hello\"") ["\"hello"]))))
 
 (deftest test-comments

@@ -8,6 +8,7 @@
 
 (defprotocol Reader
   (read-char [this] "read the next char.")
+  (peek-char [this] "pekk the next char.")
   (unread-char [this ch] "unread the char")
   (get-program [this] "return the program")
   (get-pos [this] "current pos"))
@@ -29,6 +30,12 @@
         (let [ret (char (nth program pos))]
           (update! pos inc)
           ret)
+        EOF)))
+  (peek-char [this]
+    (if (>= buf-pos 0)
+      (char (aget buf buf-pos))
+      (if (< pos (count program))
+        (char (nth program pos))
         EOF)))
   (unread-char [this ch]
     (update! buf-pos inc)
@@ -302,19 +309,77 @@
     (and (>= int-ch 97)
          (<= int-ch 122))))
 
-(defn read-error [reader msg]
-  (throw (RuntimeException. (str msg ", program: \"" (get-program reader) "\", pos:" (get-pos reader)))))
+(defn reader-error [reader & msgs]
+  (throw (RuntimeException. (str (apply str msgs) ", program: \"" (get-program reader) "\", pos:" (get-pos reader)))))
 
 (defn read-false-char-as-int [reader _]
   (int (read-char reader)))
+
+(defn read-unicode-char
+  ([^String token offset length base]
+     (let [l (+ offset length)]
+       (when-not (== (count token) l)
+         (throw (IllegalArgumentException. (str "Invalid unicode character: \\" token))))
+       (loop [i offset uc 0]
+         (if (== i l)
+           (char uc)
+           (let [d (Character/digit ^char (nth token i) ^int base)]
+             (if (== d -1)
+               (throw (IllegalArgumentException. (str "Invalid digit: " (nth token i))))
+               (recur (inc i) (long (+ d (* uc base))))))))))
+
+  ([rdr initch base length exact?]
+     (loop [i 1 uc (Character/digit ^char initch ^int base)]
+       (if (== uc -1)
+         (throw (IllegalArgumentException. (str "Invalid digit: " initch)))
+         (if-not (== i length)
+           (let [ch (peek-char rdr)]
+             (if (or (whitespace? ch)
+                     (eof? ch))
+               (if exact?
+                 (throw (IllegalArgumentException.
+                         (str "Invalid character length: " i ", should be: " length)))
+                 (char uc))
+               (let [d (Character/digit ^char ch ^int base)]
+                 (read-char rdr)
+                 (if (== d -1)
+                   (throw (IllegalArgumentException. (str "Invalid digit: " ch)))
+                   (recur (inc i) (long (+ d (* uc base))))))))
+           (char uc))))))
+
+(defn escape-char [rdr]
+  (let [ch (read-char rdr)]
+    (case ch
+      \t "\t"
+      \r "\r"
+      \n "\n"
+      \\ "\\"
+      \" "\""
+      \b "\b"
+      \f "\f"
+      \u (let [ch (read-char rdr)]
+           (if (== -1 (Character/digit ^char ch 16))
+             (reader-error rdr "Invalid unicode escape: \\u" ch)
+             (read-unicode-char rdr ch 16 4 true)))
+      \x (let [ch (read-char rdr)]
+           (if (== -1 (Character/digit ^char ch 16))
+             (reader-error rdr "Invalid unicode escape: \\x" ch)
+             (read-unicode-char rdr ch 16 2 true)))
+      (if (digit? ch)
+        (let [ch (read-unicode-char rdr ch 8 3 false)]
+          (if (> (int ch) 0337)
+            (reader-error rdr "Octal escape sequence must be in range [0, 377]")
+            ch))
+        (reader-error rdr "Unsupported escape character: \\" ch)))))
 
 (defn read-delimited
   [reader end-del]
   (loop [sb (StringBuilder.)
          ch (read-char reader)]
     (condp = ch
-      EOF (read-error reader (str "EOF while reading delimited, end-del: " end-del ))
+      EOF (reader-error reader (str "EOF while reading delimited, end-del: " end-del ))
       end-del (str sb)
+      \\ (recur (doto sb (.append (escape-char reader))) (read-char reader))
       (recur (doto sb (.append ch)) (read-char reader)))))
 
 (defn read-string*
