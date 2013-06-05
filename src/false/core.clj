@@ -383,20 +383,24 @@
       (recur (doto sb (.append ch)) (read-char reader)))))
 
 (defn read-string*
+  "Reads a string from reader"
   [reader _]
   (read-delimited reader \"))
 
 (defn read-comments
+  "Reads a comments from the reader"
   [reader _]
   (read-delimited reader \}))
 
 (declare parse*)
 (defn read-subroutine
+  "Reads a subroutine from the reader"
   [reader _]
   (let [sub-commands (parse* reader \])]
     (custom-func sub-commands)))
 
 (defn read-number
+  "Reads a number from the reader"
   [reader initch]
   (loop [sb (StringBuilder. (str initch))
          ch (read-char reader)]
