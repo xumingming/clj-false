@@ -58,7 +58,7 @@
 (defn custom-func?
   "whether x is a FALSE function"
   [x]
-  (and (func? x) (seq (:commands x))))
+  (boolean (and (func? x) (seq (:commands x)))))
 
 (defn same-fn?
   "Whether x and y are the same fn?"
@@ -325,11 +325,10 @@
   [reader _]
   (read-delimited reader \}))
 
-(declare parse)
+(declare parse*)
 (defn read-subroutine
   [reader _]
-  (let [routine-str (read-delimited reader \])
-        sub-commands (parse routine-str)]
+  (let [sub-commands (parse* reader \])]
     (custom-func sub-commands)))
 
 (defn read-number
@@ -343,46 +342,49 @@
         (do (unread-char reader ch)
           (Integer/valueOf (.toString sb)))))))
 
-(defn parse [program]
-  (let [reader (false-reader program)]
-    (loop [commands []
-           ch (read-char reader)]
-      (if (= EOF ch)
-        commands
-        (if (not (nil? (SYS-SYMBOLS ch)))
-          (recur (conj commands (SYS-SYMBOLS ch))
-                 (read-char reader))
-          (cond
-           (= \" ch)
-           (recur (conj commands (read-string* reader ch))
-                  (read-char reader))
+(defn parse*
+  [reader end-del]
+  (loop [commands []
+         ch (read-char reader)]
+    (if (= end-del ch)
+      commands
+      (if (not (nil? (SYS-SYMBOLS ch)))
+        (recur (conj commands (SYS-SYMBOLS ch))
+               (read-char reader))
+        (cond
+         (= \" ch)
+         (recur (conj commands (read-string* reader ch))
+                (read-char reader))
 
-           (= \{ ch)
-           (do
-             (read-comments reader ch)
-             (recur commands
-                    (read-char reader)))
-
-           (= \' ch)
-           (recur (conj commands (read-false-char-as-int reader ch))
-                  (read-char reader))
-
-           (low-letter? ch)
-           (recur (conj commands ch)
-                  (read-char reader))
-           
-           (= \[ ch)
-           (recur (conj commands (read-subroutine reader ch))
-                  (read-char reader))
-
-           (whitespace? ch)
+         (= \{ ch)
+         (do
+           (read-comments reader ch)
            (recur commands
-                  (read-char reader))
+                  (read-char reader)))
 
-           (digit? ch)
-           (recur (conj commands (read-number reader ch))
-                  (read-char reader))
-           ))))))
+         (= \' ch)
+         (recur (conj commands (read-false-char-as-int reader ch))
+                (read-char reader))
+
+         (low-letter? ch)
+         (recur (conj commands ch)
+                (read-char reader))
+           
+         (= \[ ch)
+         (recur (conj commands (read-subroutine reader ch))
+                (read-char reader))
+
+         (whitespace? ch)
+         (recur commands
+                (read-char reader))
+
+         (digit? ch)
+         (recur (conj commands (read-number reader ch))
+                (read-char reader))
+         )))))
+
+(defn parse [program]
+  (parse* (false-reader program) EOF))
 
 ;; ===== stack-based commands execution ======
 

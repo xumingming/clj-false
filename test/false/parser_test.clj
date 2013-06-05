@@ -1,6 +1,27 @@
 (ns false.parser-test
   (use clojure.test
        false.core))
+(declare false-eq?)
+(defn false-subroutine-eq?
+  [x y]
+  (and (custom-func? x)
+       (custom-func? y)
+       (false-eq? (:commands x) (:commands y))))
+
+(defn false-eq?
+  "Whether two FALSE program equals"
+  [x y]
+  (let [comp-fn (fn [x y]
+                  (if (custom-func? x)
+                    (false-subroutine-eq? x y)
+                    (= x y)))]
+    (and (= (count x) (count y))
+         (loop [x x y y]
+           (if (seq x)
+             (if-not (comp-fn (first x) (first y))
+               false
+               (recur (rest x) (rest y)))
+             true)))))
 
 (deftest test-number
     (testing "test parse number"
@@ -32,13 +53,8 @@
 
 (deftest test-subroutine
   (testing "test parse subroutine"
-    (let [commands (parse "[1 2+]")]
-      (is (= 1 (count commands)))
-      (is (map? (first commands)))
-      (let [sub-commands (:commands (first commands))]
-        (is (= 3 (count sub-commands)))
-        (is (= 1 (first sub-commands)))
-        (is (= 2 (second sub-commands)))
-        (is (map? (last sub-commands)))))
-    ;; ttest [[]]
-    ))
+    (is (false-eq? (parse "[1 2+]") [(custom-func [1 2 ADD])]))
+    (is (false-eq? (parse "[1 2 [1 2+] +]")
+                   [(custom-func [1 2
+                                  (custom-func [1 2 ADD])
+                                  ADD])]))))
