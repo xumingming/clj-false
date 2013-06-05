@@ -9,6 +9,7 @@
 (defprotocol Reader
   (read-char [this] "read the next char.")
   (unread-char [this ch] "unread the char")
+  (get-program [this] "return the program")
   (get-pos [this] "current pos"))
 
 (def EOF ::EOF)
@@ -32,7 +33,8 @@
   (unread-char [this ch]
     (update! buf-pos inc)
     (aset buf buf-pos ch))
-  (get-pos [this] pos))
+  (get-pos [this] pos)
+  (get-program [this] program))
 
 (defn false-reader [program]
   (FalseReader. program 0 (object-array 10) -1))
@@ -301,7 +303,7 @@
          (<= int-ch 122))))
 
 (defn read-error [reader msg]
-  (throw (RuntimeException. (str msg ", pos:" (get-pos reader)))))
+  (throw (RuntimeException. (str msg ", program: \"" (get-program reader) "\", pos:" (get-pos reader)))))
 
 (defn read-false-char-as-int [reader _]
   (int (read-char reader)))
